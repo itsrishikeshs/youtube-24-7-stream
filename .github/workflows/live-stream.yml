@@ -1,9 +1,12 @@
-name: 24-7 YouTube Live Stream
+name: 8-Hour YouTube Live Stream
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '0 */5 * * *'
+    inputs:
+      cycle:
+        description: 'Relay cycle (1 or 2)'
+        required: false
+        default: '1'
 
 concurrency:
   group: youtube-stream
@@ -12,7 +15,7 @@ concurrency:
 jobs:
   stream:
     runs-on: ubuntu-latest
-    timeout-minutes: 360
+    timeout-minutes: 260
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -32,10 +35,11 @@ jobs:
         env:
           STREAM_KEY: ${{ secrets.YOUTUBE_STREAM_KEY }}
         run: |
-          timeout 18000s ffmpeg -re -stream_loop -1 -i compilation.mp4 -c copy -f flv -flvflags no_duration_filesize "rtmp://a.rtmp.youtube.com/live2/${STREAM_KEY}" || true
+          # Stream for 4 hours (14400s)
+          timeout 14400s ffmpeg -re -stream_loop -1 -i compilation.mp4 -c copy -f flv -flvflags no_duration_filesize "rtmp://a.rtmp.youtube.com/live2/${STREAM_KEY}" || true
 
-      - name: Trigger Next Relay Cycle
-        if: always()
+      - name: Trigger Next Relay Cycle (Only for Cycle 1 to reach 8h total)
+        if: always() && github.event.inputs.cycle != '2'
         env:
           PAT: ${{ secrets.GH_PAT }}
         run: |
@@ -43,4 +47,4 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${PAT}" \
             https://api.github.com/repos/itsrishikeshs/youtube-24-7-stream/actions/workflows/live-stream.yml/dispatches \
-            -d '{"ref":"main"}' || true
+            -d '{"ref":"main","inputs":{"cycle":"2"}}' || true
